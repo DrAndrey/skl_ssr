@@ -60,6 +60,15 @@ class TestSubsetRegression(unittest.TestCase):
         with self.assertRaises(NotFittedError):
             regression.predict(x)
 
+    def test_t_test(self):
+        bias = 1.0
+        regression = SubsetRegression()
+        x, y, real_coef = self.create_regression_dataset(bias)
+
+        regression.fit(x, y)
+        mask = regression.make_t_test(x, y)
+        self.assertFalse(mask.all())
+
 if __name__ == '__main__':
     unittest.main()
 
