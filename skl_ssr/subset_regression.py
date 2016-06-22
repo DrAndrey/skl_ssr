@@ -24,7 +24,16 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
         return x
 
     def _calc_rss(self, y, y_pred):
-        rss = ((y - y_pred) ** 2).sum()
+        if len(y.shape) == 1:
+            y = y.reshape((-1, 1))
+            y_pred = y_pred.reshape((-1, 1))
+
+        err = y - y_pred
+        cov = np.cov(err.T)
+        if not cov.shape:
+            cov = np.array([[cov]])
+        cov_1 = np.linalg.inv(cov)
+        rss = (np.dot(err, cov_1) * err).sum()
         return rss
 
     def _calc_dependent_variable_variance(self, x, y):
@@ -51,7 +60,7 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
     def make_t_test(self, x, y, alpha=0.05):
         z_score, conf_interval = self._calc_coef_z_score(x, y, alpha)
         t = stats.t.cdf(z_score, x.shape[0]-x.shape[1])
-        return (t < alpha) | (t > 1 - alpha)
+        return (t < alpha / 2) | (t > 1 - alpha / 2)
 
     def fit(self, x, y):
         x = np.array(x)
@@ -74,7 +83,9 @@ if __name__ == '__main__':
     from sklearn.linear_model import LinearRegression
 
     x, y, real_coef = make_regression(n_samples=1000, n_features=10, n_informative=5, bias=1.0, coef=True,
-                                      random_state=1, n_targets=2, noise=1.0)
+                                      random_state=1, n_targets=1, noise=1.0)
 
     regression = SubsetRegression()
+    regression.fit(x, y)
+    regression._calc_rss(y, regression.predict(x))
 
