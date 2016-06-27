@@ -4,10 +4,14 @@
 
 """
 
+import copy
+
 import numpy as np
 import scipy.stats as stats
 from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.linear_model import LinearRegression
 from sklearn.utils.validation import NotFittedError
+from sklearn.metrics import mean_squared_error
 
 
 class TTLinearRegression(BaseEstimator, RegressorMixin):
@@ -57,6 +61,70 @@ class TTLinearRegression(BaseEstimator, RegressorMixin):
         x = np.array(x)
         x = self._add_intercept(x)
         return np.dot(x, self.coef_)
+
+
+class SubsetRegression(BaseEstimator, RegressorMixin):
+
+    def __init__(self, intercept=True):
+        self.lr = None
+        self.intercept = intercept
+
+    def _calc_lr_error(self, x, y):
+        self.lr.fit(x, y)
+        y_pred = self.lr.predict(x)
+        return mean_squared_error(y, y_pred)
+
+    def _forward_step(self, x, y, best_subset, considered_vars):
+        best_var = None
+        best_err = None
+        if best_subset:
+            best_err = self._calc_lr_error(x[:, list(best_subset)], y)
+
+        for var in considered_vars:
+            best_subset.add(var)
+            new_err = self._calc_lr_error(x[:, list(best_subset)], y)
+            if best_err is None or new_err < best_err:
+                best_err = new_err
+                best_var = var
+            best_subset.remove(var)
+
+        is_converged = True
+        if best_var:
+            best_subset.add(best_var)
+            is_converged = False
+        return is_converged
+
+    def _backward_step(self, x, y, best_subset):
+        worst_var = None
+        best_err = self._calc_lr_error(x[:, list(best_subset)], y)
+
+        need_backward_step = True
+        while len(best_subset) > 1 and need_backward_step:
+            for var in copy.copy(best_subset):
+                best_subset.remove(var)
+                new_err = self._calc_lr_error(x[:, list(best_subset)], y) - 5
+                if new_err <= best_err:
+                    best_err = new_err
+                    worst_var = var
+                best_subset.add(var)
+            if worst_var:
+                best_subset.remove(worst_var)
+                worst_var = None
+            else:
+                need_backward_step = False
+
+    def fit(self, x, y):
+        self.lr = LinearRegression(fit_intercept=self.intercept)
+
+        is_converged = False
+        best_subset = set()
+        vars_to_model = set(range(x.shape[1]))
+        while not is_converged:
+            considered_vars = vars_to_model - best_subset
+            is_converged = self._forward_step(x, y, best_subset, considered_vars)
+            if not is_converged:
+                self._backward_step(x, y, best_subset)
+        self.best_subset = best_subset
 
 
 if __name__ == '__main__':
