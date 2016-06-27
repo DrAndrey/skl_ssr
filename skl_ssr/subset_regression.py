@@ -4,16 +4,13 @@
 
 """
 
-# обращение почти сингулярной матрицы
-# сделать поддержку разных типов (особенно разряженные матрицы) - как в sklearn.linear_model.LinearRegression
-
 import numpy as np
 import scipy.stats as stats
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import NotFittedError
 
 
-class SubsetRegression(BaseEstimator, RegressorMixin):
+class TTLinearRegression(BaseEstimator, RegressorMixin):
 
     def __init__(self, intercept=True):
         self.intercept = intercept
@@ -22,19 +19,6 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
         if self.intercept:
             return np.hstack((np.ones(x.shape[0]).reshape((-1, 1)), x))
         return x
-
-    def _calc_rss(self, y, y_pred):
-        if len(y.shape) == 1:
-            y = y.reshape((-1, 1))
-            y_pred = y_pred.reshape((-1, 1))
-
-        err = y - y_pred
-        cov = np.cov(err.T)
-        if not cov.shape:
-            cov = np.array([[cov]])
-        cov_1 = np.linalg.inv(cov)
-        rss = (np.dot(err, cov_1) * err).sum()
-        return rss
 
     def _calc_dependent_variable_variance(self, x, y):
         if not hasattr(self, "coef_"):
@@ -47,7 +31,7 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
         dvv = self._calc_dependent_variable_variance(x, y)
 
         x = self._add_intercept(x)
-        xx_1 = np.linalg.inv(np.dot(x.T, x))
+        xx_1 = np.linalg.pinv(np.dot(x.T, x))
         coef_variances = np.dot(xx_1.reshape(-1, 1), dvv).reshape((x.shape[1], x.shape[1], dvv.shape[1]))
         cv_diag = coef_variances.diagonal(0, 0, 1) ** 0.5
 
@@ -63,9 +47,6 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
         return (t < alpha / 2) | (t > 1 - alpha / 2)
 
     def fit(self, x, y):
-        x = np.array(x)
-        y = np.array(y)
-
         x = self._add_intercept(x)
         self.coef_, residuals, rank, s = np.linalg.lstsq(x, y)
 
@@ -79,13 +60,4 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
 
 
 if __name__ == '__main__':
-    from sklearn.datasets import make_regression
-    from sklearn.linear_model import LinearRegression
-
-    x, y, real_coef = make_regression(n_samples=1000, n_features=10, n_informative=5, bias=1.0, coef=True,
-                                      random_state=1, n_targets=1, noise=1.0)
-
-    regression = SubsetRegression()
-    regression.fit(x, y)
-    regression._calc_rss(y, regression.predict(x))
-
+    pass
