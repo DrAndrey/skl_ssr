@@ -65,13 +65,18 @@ class TTLinearRegression(BaseEstimator, RegressorMixin):
 
 class SubsetRegression(BaseEstimator, RegressorMixin):
 
-    def __init__(self, intercept=True):
+    def __init__(self, intercept=True, scorer=None, tol=None, verbose=False):
         self.lr = None
         self.intercept = intercept
+        self.scorer = scorer
+        self.tol = tol
+        self.verbose = verbose
 
     def _calc_lr_error(self, x, y):
         self.lr.fit(x, y)
         y_pred = self.lr.predict(x)
+        if self.scorer:
+            return self.scorer(y, y_pred)
         return mean_squared_error(y, y_pred)
 
     def _forward_step(self, x, y, best_subset, considered_vars):
@@ -102,7 +107,7 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
         while len(best_subset) > 1 and need_backward_step:
             for var in copy.copy(best_subset):
                 best_subset.remove(var)
-                new_err = self._calc_lr_error(x[:, list(best_subset)], y) - 5
+                new_err = self._calc_lr_error(x[:, list(best_subset)], y)
                 if new_err <= best_err:
                     best_err = new_err
                     worst_var = var
@@ -124,8 +129,21 @@ class SubsetRegression(BaseEstimator, RegressorMixin):
             is_converged = self._forward_step(x, y, best_subset, considered_vars)
             if not is_converged:
                 self._backward_step(x, y, best_subset)
-        self.best_subset = best_subset
 
+            err = self._calc_lr_error(x[:, list(best_subset)], y)
+            if self.tol and err < self.tol:
+                is_converged = True
+            if self.verbose:
+                msg = "Subset step. Number of features - {0}. Error value - {1}".format(len(best_subset), err)
+                print(msg)
+        self.best_subset = best_subset
+        self.lr.fit(x[:, list(best_subset)], y)
+
+    def predict(self, x):
+        return self.lr.predict(x)
+
+    def score(self, x, y, sample_weight=None):
+        return self._calc_lr_error(x, y)
 
 if __name__ == '__main__':
     pass
